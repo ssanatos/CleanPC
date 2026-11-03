@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>파일 정리기</title>
+<style>
+:root{--bg:#eef1f4;--panel:#fff;--ink:#1c2733;--sub:#5d6b79;--line:#cfd8e0;--acc:#1f5fbf;--accink:#fff;--bad:#b3372b;--ok:#2f7d4f;--hi:#f3f7fc}
+@media (prefers-color-scheme:dark){:root{--bg:#141a21;--panel:#1c242d;--ink:#e6ebf0;--sub:#92a1b0;--line:#33404d;--acc:#6aa3ff;--accink:#0b1522;--bad:#ff8a7a;--ok:#6fcf97;--hi:#222c37}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Pretendard","Noto Sans KR","Malgun Gothic",sans-serif}
+header{padding:20px clamp(16px,4vw,40px);display:flex;gap:16px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line);background:var(--panel)}
+h1{font-size:22px;margin:0;letter-spacing:-.02em}
+#sum{color:var(--sub);flex:1;min-width:200px}
+button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px;border-radius:6px;cursor:pointer}
+button:hover{background:var(--hi)}
+button.primary{background:var(--acc);color:var(--accink);border-color:var(--acc);font-weight:600}
+button.danger{background:var(--bad);color:#fff;border-color:var(--bad);font-weight:600}
+button:disabled{opacity:.45;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+nav{display:flex;gap:4px;padding:12px clamp(16px,4vw,40px) 0;overflow-x:auto}
+nav button{border-radius:6px 6px 0 0;border-bottom:none;white-space:nowrap}
+nav button[aria-selected=true]{background:var(--acc);color:var(--accink);border-color:var(--acc)}
+main{margin:0 clamp(16px,4vw,40px) 24px;background:var(--panel);border:1px solid var(--line);padding:20px;min-height:320px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:14px}
+label{display:flex;flex-direction:column;font-size:13px;color:var(--sub);gap:4px}
+input,select{font:inherit;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);min-width:0}
+.tbl{overflow-x:auto;max-height:420px;overflow-y:auto;border:1px solid var(--line)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:6px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{position:sticky;top:0;background:var(--hi)}
+td.p{color:var(--sub)}td.n{text-align:right}
+.grp{border:1px solid var(--line);margin-bottom:10px}
+.grp h3{margin:0;padding:8px 12px;font-size:14px;background:var(--hi)}
+.grp label{flex-direction:row;align-items:center;padding:5px 12px;color:var(--ink);font-size:14px;gap:8px;overflow-wrap:anywhere}
+.grp small{color:var(--sub)}
+.muted{color:var(--sub)}.old{color:var(--bad)}.new{color:var(--ok)}
+#log{margin:0 clamp(16px,4vw,40px) 32px;padding:12px;background:var(--panel);border:1px solid var(--line);height:130px;overflow:auto;font:13px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap}
+#bar{height:4px;background:var(--line);margin-bottom:12px;display:none}#bar i{display:block;height:100%;width:0;background:var(--acc)}
+.note{font-size:13px;color:var(--sub);margin:8px 0 0}
+.tree{font:13px/1.8 ui-monospace,Consolas,"Malgun Gothic",monospace;padding:8px 12px;white-space:pre;overflow-x:auto}
+.tree b{color:var(--ok)}.tree s{color:var(--bad);text-decoration:none}
+.badge{display:inline-block;padding:0 6px;border-radius:4px;background:var(--acc);color:var(--accink);font-size:12px}
+.badge.fork{background:var(--bad);color:#fff}
+.rule label{flex-direction:row;align-items:center;gap:6px;color:var(--ink);margin-bottom:8px;flex-wrap:wrap}
+.rule input[type=number]{width:80px}
+.grp .thumbs{display:flex;flex-wrap:wrap;gap:10px;padding:10px}
+.grp .thumbs label{flex-direction:column;align-items:flex-start;width:130px;padding:0;font-size:12px;gap:3px}
+.thumbs img{width:130px;height:100px;object-fit:cover;border:1px solid var(--line)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>파일 정리기</h1>
+  <span id="sum">폴더를 선택하면 시작해요. 파일은 브라우저 밖으로 나가지 않아요.</span>
+  <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)"><input type="checkbox" id="usetrash" checked> 삭제 시 휴지통 폴더로 이동</label>
+  <button class="primary" id="pick">폴더 선택</button>
+  <button id="rescan" disabled>다시 스캔</button>
+</header>
+<nav role="tablist">
+  <button role="tab" data-t="files" aria-selected="true">파일 목록</button>
+  <button role="tab" data-t="dups" aria-selected="false">중복 파일</button>
+  <button role="tab" data-t="ren" aria-selected="false">이름 바꾸기</button>
+  <button role="tab" data-t="org" aria-selected="false">폴더 정리</button>
+  <button role="tab" data-t="sim" aria-selected="false">비슷한 파일·버전</button>
+  <button role="tab" data-t="img" aria-selected="false">비슷한 이미지</button>
+  <button role="tab" data-t="rec" aria-selected="false">정리 추천</button>
+  <button role="tab" data-t="hist" aria-selected="false">기록·되돌리기</button>
+  <button role="tab" data-t="tag" aria-selected="false">목적·유효기간</button>
+</nav>
+<main>
+  <div id="bar"><i></i></div>
+
+  <section id="files">
+    <div class="row">
+      <label>검색<input id="q" placeholder="이름 또는 경로"></label>
+      <label>정렬<select id="sort"><option value="name">이름순</option><option value="size">큰 파일순</option><option value="date">최근 수정순</option></select></label>
+    </div>
+    <div class="tbl"><table><thead><tr><th>경로</th><th>이름</th><th>크기</th><th>수정일</th></tr></thead><tbody id="ftb"></tbody></table></div>
+    <p class="note" id="fnote"></p>
+  </section>
+
+  <section id="dups" hidden>
+    <div class="row"><button class="primary" id="finddup">중복 검사 시작</button><span class="muted" id="dupsum"></span></div>
+    <div id="dupl"></div>
+    <div class="row"><button class="danger" id="deldup" hidden>체크한 파일 삭제</button></div>
+    <p class="note">크기가 같은 파일만 SHA-256으로 비교해요. 256MB를 넘는 파일은 앞뒤 1MB만 비교합니다. 삭제는 기본적으로 선택 폴더 안의 .정리기/휴지통으로 옮겨요(되돌리기 가능).</p>
+  </section>
+
+  <section id="ren" hidden>
+    <div class="row">
+      <label>방식<select id="rmode">
+        <option value="replace">글자 바꾸기</option>
+        <option value="prefix">앞에 붙이기</option>
+        <option value="suffix">뒤에 붙이기</option>
+        <option value="number">순번 매기기</option>
+        <option value="date">수정일 앞에 붙이기</option>
+        <option value="space">공백을 _ 로</option>
+        <option value="lower">소문자로</option>
+        <option value="upper">대문자로</option>
+      </select></label>
+      <label id="la">찾을 글자<input id="ra"></label>
+      <label id="lb">바꿀 글자<input id="rb"></label>
+      <label>확장자 필터<input id="rext" placeholder="예: jpg,png (비우면 전체)"></label>
+      <label>범위<select id="rscope"><option value="all">하위 폴더 포함</option><option value="top">선택 폴더만</option></select></label>
+      <button id="rprev">미리보기</button>
+    </div>
+    <div class="row"><label>저장된 규칙<select id="rpre"><option value="">(선택)</option></select></label><button id="rsave">현재 규칙 저장</button><button id="rdelpre">선택 규칙 삭제</button><span class="muted">이 브라우저에 저장돼요</span></div>
+    <div class="tbl"><table><thead><tr><th>폴더</th><th>현재 이름</th><th>바꿀 이름</th></tr></thead><tbody id="rtb"></tbody></table></div>
+    <div class="row" style="margin-top:12px"><button class="primary" id="rgo" disabled>이름 바꾸기 실행</button><span class="muted" id="rsum"></span></div>
+    <p class="note">같은 이름이 이미 있으면 “이름 (1)”처럼 번호를 붙여요. 확장자는 유지됩니다.</p>
+  </section>
+
+  <section id="org" hidden>
+    <div class="row">
+      <label>분류 기준<select id="omode"><option value="ext">확장자별</option><option value="cat">종류별 (이미지·문서·영상…)</option><option value="month">수정 연-월별</option></select></label>
+      <label>대상<select id="oscope"><option value="top">선택 폴더 바로 아래 파일만</option><option value="all">하위 폴더 파일까지</option></select></label>
+      <button id="oprev">미리보기</button>
+    </div>
+    <div class="tbl"><table><thead><tr><th>파일</th><th>이동할 폴더</th></tr></thead><tbody id="otb"></tbody></table></div>
+    <div class="row" style="margin-top:12px"><button class="primary" id="ogo" disabled>정리 실행</button><span class="muted" id="osum"></span></div>
+    <hr style="border:0;border-top:1px solid var(--line);margin:20px 0">
+    <div class="row"><button class="danger" id="delempty" disabled>빈 폴더 삭제</button><span class="muted" id="esum"></span></div>
+    <p class="note">정리한 파일은 선택한 폴더 안에 분류 폴더를 만들어 옮겨요. 숨김 폴더(.으로 시작)와 node_modules는 건너뜁니다.</p>
+  </section>
+  <section id="sim" hidden>
+    <div class="row">
+      <label>비슷함 기준<select id="sth"><option value=".8">엄격 (80%)</option><option value=".65" selected>보통 (65%)</option><option value=".5">느슨 (50%)</option></select></label>
+      <label>정리 방식<select id="smode">
+        <option value="renmove">폴더로 이동 + 버전 이름으로 변경</option>
+        <option value="ren">버전 이름으로만 변경 (제자리)</option>
+        <option value="move">폴더로 이동만 (이름 유지)</option>
+        <option value="list">원본은 두고 목록 파일만 만들기</option>
+      </select></label>
+      <button class="primary" id="sfind">비슷한 파일 찾기</button>
+    </div>
+    <p class="muted" id="ssum">초안·시안·최종·찐최종·v2 같은 꼬리표를 떼고 같은 이름끼리 묶어요.</p>
+    <div id="sgrp"></div>
+    <div class="row"><button class="primary" id="sgo" disabled>체크한 묶음 정리 실행</button></div>
+    <p class="note">순서는 수정 시각 기준이에요(브라우저는 생성 시각을 알려주지 않아요). 부모는 앞선 파일 중 이름·내용(텍스트 파일)·크기가 가장 비슷한 파일이에요. 새 이름의 <code>_from-v02</code>는 직전 버전이 아니라 v02에서 갈라졌다는 뜻이에요. 웹페이지는 진짜 바로가기(.lnk)를 만들 수 없어서, 대신 경로가 담긴 <code>_목록.txt</code>를 만들어요.</p>
+  </section>
+  <section id="img" hidden>
+    <div class="row">
+      <label>비슷함 기준<select id="ith"><option value="4">엄격</option><option value="8" selected>보통</option><option value="12">느슨</option></select></label>
+      <button class="primary" id="igo">비슷한 이미지 찾기</button><span class="muted" id="isum"></span>
+    </div>
+    <div id="imgl"></div>
+    <div class="row"><button class="danger" id="idel" hidden>체크한 이미지 삭제</button></div>
+    <p class="note">크기·해상도가 달라도 같은 그림이면 묶어요(축소본, 재저장본). 가장 큰 해상도 파일을 남기는 쪽으로 기본 체크돼요. 회전·좌우반전·크게 잘린 이미지는 못 찾아요. jpg·png·webp·bmp·gif·avif만 지원해요.</p>
+  </section>
+
+  <section id="rec" hidden>
+    <p class="muted">기준을 고르면 삭제 후보를 보여줘요. 후보는 처음에 체크되어 있지 않으니 직접 고르세요.</p>
+    <div class="rule">
+      <label><input type="checkbox" id="c1" checked> 오래 안 쓴 파일: 마지막 수정 후 <input type="number" id="n1" value="400" min="1"> 일 이상</label>
+      <label><input type="checkbox" id="c2" checked> 여러 버전 묶음의 초·중반 버전: 최신 <input type="number" id="n2" value="2" min="1"> 개와 ‘최종’류·각 가지의 끝은 남김</label>
+      <label><input type="checkbox" id="c3"> 큰 파일 <input type="number" id="n3" value="100" min="1"> MB 이상이면서 <input type="number" id="n3d" value="180" min="1"> 일 이상 안 쓴 것</label>
+      <label><input type="checkbox" id="c4" checked> 0바이트 빈 파일</label>
+      <label><input type="checkbox" id="c6" checked> 이름에 적은 유효기간이 지났거나 목적이 달성된({목적✔}) 파일·폴더 <small class="muted">— ‘목적·유효기간’ 탭에서 붙여요</small></label>
+      <label><input type="checkbox" id="c5" checked> 임시·잔여 파일 (~$, .tmp, .bak, Thumbs.db, .DS_Store, desktop.ini)</label>
+    </div>
+    <div class="row"><button class="primary" id="recgo">삭제 후보 보기</button><button id="recall">전체 체크</button><span class="muted" id="recsum"></span></div>
+    <div id="recl"></div>
+    <div class="row"><button class="danger" id="recdel" hidden>체크한 파일 삭제</button></div>
+    <p class="note">브라우저는 ‘마지막 사용 시각’을 알려주지 않아서 수정 시각으로 판단해요. 읽기만 한 파일도 오래 안 쓴 걸로 나올 수 있어요. 버전 기준은 ‘비슷한 파일·버전’ 탭과 같은 방식으로 묶어요.</p>
+  </section>
+
+  <section id="hist" hidden>
+    <div class="row"><span class="muted">이동·이름 변경·삭제를 되돌릴 수 있어요. 기록은 선택한 폴더의 .정리기 폴더에 저장돼요.</span><button class="danger" id="etrash">휴지통 폴더 비우기</button></div>
+    <div id="hl"></div>
+  </section>
+  <section id="tag" hidden>
+    <p class="muted">파일·폴더 이름에 목적과 유효기간을 적어요. 형식: <code>견적서{발표용}[~2026-12-31].pdf</code> — 목적이 끝나면 <code>{발표용✔}</code>. 직접 이렇게 이름을 지어도 인식돼요.</p>
+    <div class="row">
+      <label>검색<input id="tq"></label>
+      <label>종류<select id="tk"><option value="all">파일+폴더</option><option value="f">파일만</option><option value="d">폴더만</option></select></label>
+      <label>보기<select id="tf"><option value="all">전체</option><option value="tag">태그 있는 것만</option></select></label>
+    </div>
+    <div class="tbl" style="max-height:260px"><table><tbody id="ttb"></tbody></table></div>
+    <div class="row" style="margin-top:12px">
+      <label>동작<select id="tact"><option value="set">목적·유효기간 붙이기/바꾸기</option><option value="done">목적 달성 표시 (✔)</option><option value="clear">태그 지우기</option></select></label>
+      <label>목적<input id="tp" placeholder="예: 발표용"></label>
+      <label>유효기간<input type="date" id="td"></label>
+      <label>또는 N일 뒤<input type="number" id="tn" min="1" placeholder="90" style="width:90px"></label>
+      <button id="tprev">미리보기</button>
+    </div>
+    <div class="tbl"><table><thead><tr><th>현재 이름</th><th>바꿀 이름</th></tr></thead><tbody id="tpv"></tbody></table></div>
+    <div class="row" style="margin-top:12px"><button class="primary" id="tgo" disabled>적용</button><span class="muted" id="tsum"></span></div>
+    <p class="note">목적이나 유효기간 중 비워 둔 칸은 기존 값을 유지해요. 폴더 이름 바꾸기는 안의 파일을 새 폴더로 옮기는 방식이라 큰 폴더는 오래 걸려요(되돌리기 가능). 체크한 항목은 ‘정리 추천’의 규칙 6에 따라 만료·달성 시 삭제 후보에 올라요.</p>
+  </section>
+</main>
+<pre id="log" aria-live="polite"></pre>
+
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=n=>n<1024?n+' B':n<2**20?(n/1024).toFixed(1)+' KB':n<2**30?(n/2**20).toFixed(1)+' MB':(n/2**30).toFixed(2)+' GB';
+const dstr=t=>{const d=new Date(t),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())};
+const CAT={'이미지':'jpg jpeg png gif webp bmp svg heic','문서':'pdf doc docx xls xlsx ppt pptx txt hwp hwpx md csv','영상':'mp4 mkv avi mov wmv webm','음악':'mp3 wav flac m4a ogg aac','압축':'zip rar 7z tar gz','코드':'html css js ts py json ipynb'};
+let root, files=[], dirs=[], empties=[], dupGroups=[], rplan=[], oplan=[], busy=false;
+
+const split=n=>{const i=n.lastIndexOf('.');return i>0?[n.slice(0,i),n.slice(i)]:[n,'']};
+const extOf=n=>split(n)[1].slice(1).toLowerCase();
+const full=f=>[...f.path,f.name].join('/');
+const log=m=>{const l=$('#log');l.textContent+=m+'\n';l.scrollTop=l.scrollHeight};
+const prog=(a,b)=>{$('#bar').style.display=b?'block':'none';$('#bar i').style.width=b?(a/b*100)+'%':0};
+
+/* 폴더 읽기 */
+$('#pick').onclick=async()=>{
+  if(!window.showDirectoryPicker){alert('이 브라우저는 폴더 접근을 지원하지 않아요. PC의 크롬 또는 엣지에서 열어 주세요.');return}
+  try{root=await showDirectoryPicker({mode:'readwrite'})}catch{return}
+  DP.set(root,[]);await scan();
+};
+$('#rescan').onclick=()=>scan();
+async function walk(dir,path,parent){
+  DP.set(dir,path);
+  if(parent)dirs.push({isDir:true,name:dir.name,fp:path,path:path.slice(0,-1),h:dir,parent,size:0,mtime:0});
+  let n=0;
+  for await(const [name,h] of dir.entries()){
+    n++;
+    if(h.kind==='directory'){
+      if(name.startsWith('.')||name==='node_modules')continue;
+      await walk(h,[...path,name],dir);
+    }else{
+      const f=await h.getFile();
+      files.push({name,dir,path,h,size:f.size,mtime:f.lastModified});
+    }
+  }
+  if(n===0&&parent)empties.push({dir:parent,name:dir.name});
+}
+async function scan(){
+  $('#sum').textContent='스캔 중…';files=[];dirs=[];empties=[];dupGroups=[];rplan=[];oplan=[];
+  try{await walk(root,[],null)}catch(e){log('스캔 실패: '+e.message);return}
+  const dm=new Map(dirs.map(d=>[d.fp.join('/'),d]));
+  files.forEach(f=>{for(let k=1;k<=f.path.length;k++){const d=dm.get(f.path.slice(0,k).join('/'));if(d){d.size+=f.size;d.mtime=Math.max(d.mtime,f.mtime)}}});
+  $('#rescan').disabled=false;
+  $('#sum').textContent=`${root.name} — 파일 ${files.length.toLocaleString()}개 · ${fmt(files.reduce((a,f)=>a+f.size,0))} · 빈 폴더 ${empties.length}개`;
+  $('#delempty').disabled=!empties.length;$('#esum').textContent=empties.length?`빈 폴더 ${empties.length}개`:'빈 폴더가 없어요';
+  $('#dupl').innerHTML='';$('#imgl').innerHTML='';$('#recl').innerHTML='';$('#sgrp').innerHTML='';sgroups=[];$('#dupsum').textContent='';$('#deldup').hidden=true;
+  $('#rtb').innerHTML='';$('#rgo').disabled=true;$('#otb').innerHTML='';$('#ogo').disabled=true;
+  renderFiles();renderTag();log(`스캔 완료: 파일 ${files.length}개`);
+}
+
+/* 탭 */
+$$('nav button').forEach(b=>b.onclick=()=>{
+  $$('nav button').forEach(x=>x.setAttribute('aria-selected',x===b));
+  ['files','dups','ren','org','sim','img','rec','hist','tag'].forEach(id=>$('#'+id).hidden=id!==b.dataset.t);
+});
+
+/* 파일 목록 */
+function renderFiles(){
+  const q=$('#q').value.toLowerCase(),s=$('#sort').value;
+  const l=files.filter(f=>full(f).toLowerCase().includes(q));
+  l.sort(s==='size'?(a,b)=>b.size-a.size:s==='date'?(a,b)=>b.mtime-a.mtime:(a,b)=>full(a).localeCompare(full(b)));
+  $('#ftb').innerHTML=l.slice(0,300).map(f=>`<tr><td class="p">${esc(f.path.join('/')||'/')}</td><td>${esc(f.name)}</td><td class="n">${fmt(f.size)}</td><td>${dstr(f.mtime)}</td></tr>`).join('')||'<tr><td colspan="4" class="muted">표시할 파일이 없어요.</td></tr>';
+  $('#fnote').textContent=l.length>300?`${l.length}개 중 300개만 표시해요. 검색으로 좁혀 보세요.`:'';
+}
+$('#q').oninput=renderFiles;$('#sort').onchange=renderFiles;
+
+/* 공통 작업 */
+async function exists(dir,n){try{await dir.getFileHandle(n);return true}catch{return false}}
+async function uniq(dir,name){
+  const [b,e]=split(name);let n=name,i=1;
+  while(await exists(dir,n))n=`${b} (${i++})${e}`;
+  return n;
+}
+let cur=[],tdirH=null,tsName='';const DP=new WeakMap();
+async function subdir(name){const d=await root.getDirectoryHandle(name,{create:true});DP.set(d,[name]);return d}
+async function relocate(f,destDir,name){
+  let done=false;
+  try{if(f.h.move){await f.h.move(destDir,name);done=true}}catch{}
+  if(!done){
+    const nh=await destDir.getFileHandle(name,{create:true});
+    const src=await f.h.getFile();
+    await src.stream().pipeTo(await nh.createWritable());
+    if((await nh.getFile()).size!==src.size){await destDir.removeEntry(name);throw new Error('복사본 크기가 달라요')}
+    await f.dir.removeEntry(f.name);
+  }
+  cur.push({from:[...f.path,f.name].join('/'),to:[...(DP.get(destDir)||[]),name].join('/')});
+}
+async function toTrash(f){
+  if(!tdirH){
+    const s0=await subdir('.정리기'),t=await s0.getDirectoryHandle('휴지통',{create:true});
+    tdirH=await t.getDirectoryHandle(tsName,{create:true});DP.set(tdirH,['.정리기','휴지통',tsName]);
+  }
+  await relocate(f,tdirH,await uniq(tdirH,f.name));
+}
+async function listTree(dir,path){const out=[];for await(const [name,h] of dir.entries()){if(h.kind==='directory')out.push(...await listTree(h,[...path,name]));else out.push({name,h,dir,path})}return out}
+async function delDir(d){
+  if($('#usetrash').checked)for(const f of await listTree(d.h,d.fp))await toTrash(f);
+  await d.parent.removeEntry(d.name,{recursive:true});
+}
+async function renameDir(d,to){
+  const pp=d.fp.slice(0,-1),ph=await dirAt(pp,false);
+  let nn=to,i=1;
+  for(;;){try{await ph.getDirectoryHandle(nn);nn=`${to} (${i++})`}catch{break}}
+  const np=[...pp,nn],nd=await ph.getDirectoryHandle(nn,{create:true});DP.set(nd,np);
+  for(const f of await listTree(d.h,d.fp)){
+    const dd=await dirAt([...np,...f.path.slice(d.fp.length)],true);
+    await relocate(f,dd,await uniq(dd,f.name));
+  }
+  await ph.removeEntry(d.name,{recursive:true});
+}
+const del=f=>f.isDir?delDir(f):($('#usetrash').checked?toTrash(f):f.dir.removeEntry(f.name));
+async function readJ(){try{const s0=await root.getDirectoryHandle('.정리기'),h=await s0.getFileHandle('기록.json');return JSON.parse(await(await h.getFile()).text())}catch{return[]}}
+async function writeJ(j){const s0=await subdir('.정리기'),w=await(await s0.getFileHandle('기록.json',{create:true})).createWritable();await w.write(JSON.stringify(j.slice(-50)));await w.close()}
+async function run(label,items,fn){
+  if(busy)return;busy=true;let ok=0,fail=0;cur=[];tdirH=null;tsName=new Date().toISOString().replace(/[:T]/g,'-').slice(0,19);
+  for(let i=0;i<items.length;i++){
+    try{await fn(items[i]);ok++}catch(e){fail++;log('실패: '+e.message)}
+    prog(i+1,items.length);
+  }
+  prog(0,0);busy=false;
+  if(cur.length){try{const j=await readJ();j.push({t:Date.now(),label,ops:cur});await writeJ(j)}catch(e){log('기록 저장 실패: '+e.message)}}
+  log(`${label}: 성공 ${ok}개, 실패 ${fail}개`);
+  await scan();
+}
+
+/* 중복 파일 */
+async function hash(f){
+  const file=await f.h.getFile();
+  const buf=file.size<=256*2**20?await file.arrayBuffer():await new Blob([file.slice(0,2**20),file.slice(file.size-2**20)]).arrayBuffer();
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256',buf))].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+$('#finddup').onclick=async()=>{
+  if(!root||busy)return;busy=true;
+  const bySize=new Map();
+  files.forEach(f=>{if(f.size>0){if(!bySize.has(f.size))bySize.set(f.size,[]);bySize.get(f.size).push(f)}});
+  const cand=[...bySize.values()].filter(g=>g.length>1).flat(),byHash=new Map();
+  for(let i=0;i<cand.length;i++){
+    try{const k=cand[i].size+':'+await hash(cand[i]);if(!byHash.has(k))byHash.set(k,[]);byHash.get(k).push(cand[i])}catch(e){log('읽기 실패: '+full(cand[i]))}
+    prog(i+1,cand.length);
+  }
+  prog(0,0);busy=false;
+  dupGroups=[...byHash.values()].filter(g=>g.length>1).map(g=>g.sort((a,b)=>a.mtime-b.mtime||full(a).length-full(b).length));
+  $('#dupl').innerHTML=dupGroups.map((g,gi)=>`<div class="grp"><h3>${esc(g[0].name)} <small>${fmt(g[0].size)} × ${g.length}</small></h3>${g.map((f,i)=>`<label><input type="checkbox" data-g="${gi}" data-i="${i}" ${i?'checked':''}> ${esc(full(f))} <small>${dstr(f.mtime)}${i?'':' · 남김'}</small></label>`).join('')}</div>`).join('');
+  $('#deldup').hidden=!dupGroups.length;updDup();
+  log(`중복 검사 완료: ${dupGroups.length}그룹`);
+};
+function checked(){return $$('#dupl input:checked').map(c=>dupGroups[c.dataset.g][c.dataset.i])}
+function updDup(){
+  const c=checked();
+  $('#dupsum').textContent=dupGroups.length?`중복 ${dupGroups.length}그룹 · 선택 ${c.length}개 (${fmt(c.reduce((a,f)=>a+f.size,0))} 확보)`:'중복 파일이 없어요.';
+}
+$('#dupl').onchange=updDup;
+$('#deldup').onclick=()=>{
+  const c=checked();if(!c.length)return;
+  const bad=dupGroups.some((g,gi)=>g.every((_,i)=>$(`#dupl input[data-g="${gi}"][data-i="${i}"]`).checked));
+  if(bad){alert('한 그룹의 파일을 모두 선택할 수는 없어요. 각 그룹에서 하나는 남겨 주세요.');return}
+  if(!confirm(`${c.length}개 파일을 삭제할까요?`+($('#usetrash').checked?' (휴지통 폴더로 이동)':' 영구 삭제라 되돌릴 수 없어요.')))return;
+  run('중복 삭제',c,async f=>{await del(f);log('삭제: '+full(f))});
+};
+
+/* 이름 바꾸기 */
+const LBL={replace:['찾을 글자','바꿀 글자'],prefix:['붙일 글자',null],suffix:['붙일 글자',null],number:['앞 글자 (선택)','시작 번호'],date:[null,null],space:[null,null],lower:[null,null],upper:[null,null]};
+$('#rmode').onchange=()=>{
+  const [a,b]=LBL[$('#rmode').value];
+  $('#la').hidden=!a;$('#lb').hidden=!b;
+  if(a)$('#la').firstChild.textContent=a;if(b)$('#lb').firstChild.textContent=b;
+};
+$('#rmode').onchange();
+function rname(f,i){
+  const m=$('#rmode').value,a=$('#ra').value,b=$('#rb').value,[base,ext]=split(f.name);
+  const r={replace:()=>a?base.split(a).join(b):base,prefix:()=>a+base,suffix:()=>base+a,
+    number:()=>a+String((parseInt(b)||1)+i).padStart(3,'0'),date:()=>dstr(f.mtime).replace(/-/g,'')+'_'+base,
+    space:()=>base.replace(/\s+/g,'_'),lower:()=>base.toLowerCase(),upper:()=>base.toUpperCase()}[m]();
+  return r+ext;
+}
+$('#rprev').onclick=()=>{
+  const exts=$('#rext').value.toLowerCase().split(/[,\s]+/).filter(Boolean),top=$('#rscope').value==='top';
+  const src=files.filter(f=>(!top||!f.path.length)&&(!exts.length||exts.includes(extOf(f.name))));
+  rplan=src.map((f,i)=>({f,to:rname(f,i)})).filter(p=>p.to!==p.f.name&&p.to.trim());
+  $('#rtb').innerHTML=rplan.slice(0,300).map(p=>`<tr><td class="p">${esc(p.f.path.join('/')||'/')}</td><td class="old">${esc(p.f.name)}</td><td class="new">${esc(p.to)}</td></tr>`).join('')||'<tr><td colspan="3" class="muted">바뀌는 파일이 없어요.</td></tr>';
+  $('#rsum').textContent=`${rplan.length}개 파일이 바뀌어요`+(rplan.length>300?' (300개만 표시)':'');
+  $('#rgo').disabled=!rplan.length;
+};
+$('#rgo').onclick=()=>{
+  if(!confirm(`${rplan.length}개 파일의 이름을 바꿀까요?`))return;
+  run('이름 변경',rplan,async p=>{const n=await uniq(p.f.dir,p.to);await relocate(p.f,p.f.dir,n);log(`${p.f.name} → ${n}`)});
+};
+
+/* 폴더 정리 */
+function folderOf(f,m){
+  if(m==='month')return dstr(f.mtime).slice(0,7);
+  const e=extOf(f.name);
+  if(m==='ext')return e||'확장자 없음';
+  return Object.keys(CAT).find(k=>CAT[k].split(' ').includes(e))||'기타';
+}
+$('#oprev').onclick=()=>{
+  const m=$('#omode').value,top=$('#oscope').value==='top';
+  oplan=files.filter(f=>!top||!f.path.length).map(f=>({f,to:folderOf(f,m)})).filter(p=>!(p.f.path.length===1&&p.f.path[0]===p.to));
+  $('#otb').innerHTML=oplan.slice(0,300).map(p=>`<tr><td>${esc(full(p.f))}</td><td class="new">${esc(p.to)}/</td></tr>`).join('')||'<tr><td colspan="2" class="muted">옮길 파일이 없어요.</td></tr>';
+  $('#osum').textContent=`${oplan.length}개 파일을 ${new Set(oplan.map(p=>p.to)).size}개 폴더로 옮겨요`;
+  $('#ogo').disabled=!oplan.length;
+};
+$('#ogo').onclick=()=>{
+  if(!confirm(`${oplan.length}개 파일을 분류 폴더로 옮길까요?`))return;
+  run('폴더 정리',oplan,async p=>{
+    const d=await subdir(p.to);
+    const n=await uniq(d,p.f.name);await relocate(p.f,d,n);log(`${full(p.f)} → ${p.to}/${n}`);
+  });
+};
+$('#delempty').onclick=()=>{
+  if(!confirm(`빈 폴더 ${empties.length}개를 삭제할까요?`))return;
+  run('빈 폴더 삭제',empties,async e=>{await e.dir.removeEntry(e.name);log('삭제: '+e.name)});
+};
+/* 비슷한 파일·버전 */
+const STG={'진짜마지막최종':9,'진짜최종':8,'찐최종':8,'마지막최종':8,'최종최종':8,'최최종':7,'최종':6,'final':6,'수정':4,'시안':3,'초안':2,'draft':2,'copy':1,'복사본':1,'사본':1};
+const SRE=new RegExp(Object.keys(STG).sort((a,b)=>b.length-a.length).join('|')+'|v(?:er)?\\d+|\\(\\d+\\)|[ _-]\\d+$|진짜|마지막','gi');
+const TXT=/^(txt|md|html?|css|js|ts|py|json|csv|ipynb|xml|ya?ml|java|cpp?)$/;
+const safe=s=>s.replace(/[\\/:*?"<>|]/g,'_').trim()||'이름없음';
+const pad=n=>String(n).padStart(2,'0');
+let sgroups=[];
+function coreOf(base){
+  const tags=[];
+  const core=base.replace(SRE,m=>{tags.push(m);return ' '}).replace(/[\s_\-.()]+/g,' ').trim();
+  return {core,tags,stage:Math.max(0,...tags.map(t=>STG[t.toLowerCase()]||0))};
+}
+const bg=s=>{const m=new Map();for(let i=0;i<s.length-1;i++){const k=s.slice(i,i+2);m.set(k,(m.get(k)||0)+1)}return m};
+function dice(a,b){
+  if(a===b)return 1;if(a.length<2||b.length<2)return 0;
+  const A=bg(a),B=bg(b);let x=0;for(const [k,v] of A)x+=Math.min(v,B.get(k)||0);
+  return 2*x/(a.length+b.length-2);
+}
+function sim(a,b){
+  const n=dice(split(a.name)[0].toLowerCase(),split(b.name)[0].toLowerCase());
+  if(a.ls&&b.ls){let x=0;for(const l of a.ls)if(b.ls.has(l))x++;const u=a.ls.size+b.ls.size-x;return .4*n+.6*(u?x/u:1)}
+  return .7*n+.3*Math.min(a.size,b.size)/Math.max(a.size,b.size,1);
+}
+$('#sfind').onclick=async()=>{
+  if(!root||busy)return;busy=true;
+  const th=+$('#sth').value,byExt=new Map();
+  files.forEach(f=>{
+    const [b,e]=split(f.name),c=coreOf(b),k=c.core.replace(/\s/g,'').toLowerCase();
+    if(k.length<2)return;
+    f.cr=c;f.key=k;f.ls=null;f.kids=[];f.par=null;
+    const x=e.toLowerCase();if(!byExt.has(x))byExt.set(x,[]);byExt.get(x).push(f);
+  });
+  const found=[];
+  for(const list of byExt.values()){
+    const keys=[...new Set(list.map(f=>f.key))],idx=new Map(keys.map((k,i)=>[k,i])),par=keys.map((_,i)=>i);
+    const find=i=>par[i]===i?i:(par[i]=find(par[i]));
+    if(keys.length<=2500)for(let i=0;i<keys.length;i++)for(let j=i+1;j<keys.length;j++){
+      const a=keys[i],b=keys[j];
+      if(dice(a,b)>=th||(a.length>=3&&b.length>=3&&(a.includes(b)||b.includes(a))))par[find(i)]=find(j);
+    }
+    const gm=new Map();
+    list.forEach(f=>{const r=find(idx.get(f.key));if(!gm.has(r))gm.set(r,[]);gm.get(r).push(f)});
+    gm.forEach(g=>{if(g.length>1)found.push(g)});
+  }
+  let done=0;
+  for(const g of found){
+    for(const f of g)if(TXT.test(extOf(f.name))&&f.size<=2**21){try{f.ls=new Set((await(await f.h.getFile()).text()).split('\n').map(l=>l.trim()).filter(Boolean))}catch{}}
+    prog(++done,found.length);
+  }
+  prog(0,0);busy=false;
+  sgroups=found.map(g=>{
+    g.sort((a,b)=>a.mtime-b.mtime||a.cr.stage-b.cr.stage||a.name.localeCompare(b.name));
+    const title=safe(g[0].cr.core);
+    g.forEach((f,i)=>{
+      f.vn=i+1;let best=-1;
+      for(let j=0;j<i;j++){const s=sim(g[j],f);if(s>=best){best=s;f.par=g[j];f.ps=s}}
+      if(f.par)f.par.kids.push(f);
+    });
+    g.forEach((f,i)=>{
+      const [,ext]=split(f.name),from=f.par&&f.par!==g[i-1]?'_from-v'+pad(f.par.vn):'';
+      const tg=f.cr.tags.length?'_'+safe(f.cr.tags.join('')):'';
+      f.nn=`${title}_v${pad(f.vn)}${from}${tg}${ext}`;
+    });
+    return {title,files:g};
+  }).sort((a,b)=>b.files.length-a.files.length);
+  renderSim();log(`비슷한 파일 ${sgroups.length}묶음 발견`);
+};
+function walkTree(n,pre,last,root0,out){
+  out.push([pre+(root0?'':last?'└─ ':'├─ '),n]);
+  const kp=pre+(root0?'':last?'   ':'│  ');
+  n.kids.forEach((k,i)=>walkTree(k,kp,i===n.kids.length-1,false,out));
+}
+function treeLines(g){const out=[];walkTree(g.files[0],'',true,true,out);return out}
+function renderSim(){
+  const rows=sgroups.map((g,gi)=>{
+    const last=g.files[g.files.length-1],forks=g.files.filter(f=>f.kids.length>1).length;
+    const body=treeLines(g).map(([pre,n])=>{
+      const bd=(n.kids.length>1?` <span class="badge fork">분기 ${n.kids.length}갈래</span>`:'')+(n===last?' <span class="badge">최신</span>':'');
+      const pr=n.par?` <small class="muted">← v${pad(n.par.vn)} (${Math.round(n.ps*100)}%)</small>`:'';
+      return `${pre}v${pad(n.vn)} <s>${esc(n.name)}</s> → <b>${esc(n.nn)}</b> <small class="muted">${dstr(n.mtime)}</small>${pr}${bd}`;
+    }).join('\n');
+    return `<div class="grp"><h3><label style="padding:0"><input type="checkbox" data-g="${gi}" checked> ${esc(g.title)} <small>${g.files.length}개 · 분기 ${forks}곳 · 최신 ${esc(last.name)}</small></label></h3><div class="tree">${body}</div></div>`;
+  });
+  $('#sgrp').innerHTML=rows.join('')||'';
+  $('#ssum').textContent=sgroups.length?`${sgroups.length}묶음 · 체크 해제한 묶음은 건너뛰어요`:'비슷한 이름의 파일을 찾지 못했어요. 기준을 느슨하게 해 보세요.';
+  $('#sgo').disabled=!sgroups.length;
+}
+function listText(g){
+  return g.title+'\n\n'+treeLines(g).map(([pre,n])=>`${pre}v${pad(n.vn)} ${full(n)}  (${dstr(n.mtime)})${n.par?' ← v'+pad(n.par.vn):''}`).join('\n')+'\n';
+}
+$('#sgo').onclick=()=>{
+  const m=$('#smode').value,gs=$$('#sgrp input:checked').map(c=>sgroups[c.dataset.g]);
+  if(!gs.length)return;
+  if(!confirm(`${gs.length}개 묶음을 정리할까요?`))return;
+  if(m==='list')return run('목록 파일',gs,async g=>{
+    const d=await subdir(g.title),nh=await d.getFileHandle(await uniq(d,'_목록.txt'),{create:true});
+    const w=await nh.createWritable();await w.write(listText(g));await w.close();log('목록 생성: '+g.title+'/_목록.txt');
+  });
+  run('비슷한 파일 정리',gs.flatMap(g=>g.files.map(f=>({f,g}))),async({f,g})=>{
+    const inPlace=f.path.length===1&&f.path[0]===g.title;
+    const dir=m.includes('move')&&!inPlace?await subdir(g.title):f.dir;
+    const to=m.includes('ren')?f.nn:f.name;
+    if(dir===f.dir&&to===f.name)return;
+    const n=await uniq(dir,to);await relocate(f,dir,n);log(`${f.name} → ${dir===f.dir?'':g.title+'/'}${n}`);
+  });
+};
+/* 이름 규칙 저장 */
+const RK='fo_rules',rules=()=>{try{return JSON.parse(localStorage.getItem(RK)||'{}')}catch{return{}}};
+function fillRules(){$('#rpre').innerHTML='<option value="">(선택)</option>'+Object.keys(rules()).map(k=>`<option>${esc(k)}</option>`).join('')}
+function saveRules(r){try{localStorage.setItem(RK,JSON.stringify(r))}catch{alert('이 브라우저에서는 저장할 수 없어요')}fillRules()}
+$('#rsave').onclick=()=>{const n=prompt('규칙 이름');if(!n)return;const r=rules();r[n]={m:$('#rmode').value,a:$('#ra').value,b:$('#rb').value,e:$('#rext').value,s:$('#rscope').value};saveRules(r);$('#rpre').value=n};
+$('#rpre').onchange=()=>{const r=rules()[$('#rpre').value];if(!r)return;$('#rmode').value=r.m;$('#rmode').onchange();$('#ra').value=r.a;$('#rb').value=r.b;$('#rext').value=r.e;$('#rscope').value=r.s};
+$('#rdelpre').onclick=()=>{const r=rules();delete r[$('#rpre').value];saveRules(r)};
+fillRules();
+
+/* 비슷한 이미지 */
+const IMG=/^(jpe?g|png|webp|bmp|gif|avif)$/;
+const pc=x=>{x=x>>>0;x-=(x>>>1)&0x55555555;x=(x&0x33333333)+((x>>>2)&0x33333333);return Math.imul((x+(x>>>4))&0x0f0f0f0f,0x01010101)>>>24};
+async function dhash(f){
+  const bm=await createImageBitmap(await f.h.getFile());
+  const c=new OffscreenCanvas(9,8),x=c.getContext('2d',{willReadFrequently:true});
+  x.drawImage(bm,0,0,9,8);f.iw=bm.width;f.ih=bm.height;bm.close();
+  const d=x.getImageData(0,0,9,8).data,g=(i,j)=>{const o=(j*9+i)*4;return d[o]*.3+d[o+1]*.59+d[o+2]*.11};
+  let hi=0,lo=0;
+  for(let j=0;j<8;j++)for(let i=0;i<8;i++){const b=g(i,j)>g(i+1,j)?1:0,k=j*8+i;if(k<32)lo|=b<<k;else hi|=b<<(k-32)}
+  f.hh=[hi,lo];
+}
+let igroups=[];
+$('#igo').onclick=async()=>{
+  if(!root||busy)return;busy=true;
+  const L=files.filter(f=>IMG.test(extOf(f.name))),ok=[];
+  for(let i=0;i<L.length;i++){try{await dhash(L[i]);ok.push(L[i])}catch{}if(i%10===0)$('#isum').textContent=`분석 중 ${i+1}/${L.length}`;prog(i+1,L.length)}
+  prog(0,0);busy=false;
+  if(ok.length>6000){$('#isum').textContent='이미지가 6000장을 넘어 폴더를 나눠서 시도해 주세요.';return}
+  const th=+$('#ith').value,par=ok.map((_,i)=>i),find=i=>par[i]===i?i:(par[i]=find(par[i]));
+  for(let i=0;i<ok.length;i++)for(let j=i+1;j<ok.length;j++)if(pc(ok[i].hh[0]^ok[j].hh[0])+pc(ok[i].hh[1]^ok[j].hh[1])<=th)par[find(i)]=find(j);
+  const gm=new Map();ok.forEach((f,i)=>{const r=find(i);if(!gm.has(r))gm.set(r,[]);gm.get(r).push(f)});
+  igroups=[...gm.values()].filter(g=>g.length>1).map(g=>g.sort((a,b)=>b.iw*b.ih-a.iw*a.ih||b.size-a.size));
+  let html='';
+  for(let gi=0;gi<igroups.length;gi++){
+    html+=`<div class="grp"><h3>${igroups[gi].length}장</h3><div class="thumbs">`;
+    for(let i=0;i<igroups[gi].length;i++){const f=igroups[gi][i];
+      html+=`<label><img loading="lazy" src="${URL.createObjectURL(await f.h.getFile())}" alt=""><span><input type="checkbox" data-g="${gi}" data-i="${i}" ${i?'checked':''}> ${i?'':'남김 · '}${f.iw}×${f.ih}</span><span class="muted">${fmt(f.size)}</span><span style="overflow-wrap:anywhere">${esc(full(f))}</span></label>`}
+    html+='</div></div>';
+  }
+  $('#imgl').innerHTML=html;$('#idel').hidden=!igroups.length;
+  $('#isum').textContent=igroups.length?`${igroups.length}묶음 (이미지 ${ok.length}장 분석)`:`비슷한 이미지가 없어요 (${ok.length}장 분석)`;
+};
+$('#idel').onclick=()=>{
+  const c=$$('#imgl input:checked').map(x=>igroups[x.dataset.g][x.dataset.i]);if(!c.length)return;
+  if(igroups.some((g,gi)=>g.every((_,i)=>$(`#imgl input[data-g="${gi}"][data-i="${i}"]`).checked))){alert('한 묶음의 이미지를 모두 선택할 수는 없어요.');return}
+  if(!confirm(`${c.length}개 이미지를 삭제할까요?`+($('#usetrash').checked?' (휴지통 폴더로 이동)':' 영구 삭제라 되돌릴 수 없어요.')))return;
+  run('비슷한 이미지 삭제',c,async f=>{await del(f);log('삭제: '+full(f))});
+};
+
+/* 정리 추천 */
+const JUNK=/^(~\$.*|.*\.tmp|thumbs\.db|\.ds_store|desktop\.ini|.*\.bak|.*~)$/i;
+let recs=[];
+$('#recgo').onclick=async()=>{
+  if(!root||busy)return;const now=Date.now(),R=new Map(),age=f=>(now-f.mtime)/864e5;
+  const add=(f,w)=>{if(!R.has(f))R.set(f,[]);R.get(f).push(w)};
+  if($('#c1').checked){const d=+$('#n1').value;files.forEach(f=>{if(age(f)>=d)add(f,`${Math.floor(age(f))}일간 수정 없음`)})}
+  if($('#c2').checked){
+    if(!sgroups.length)await $('#sfind').onclick();
+    const k=+$('#n2').value;
+    sgroups.forEach(g=>{
+      const n=g.files.length;if(n<3)return;const mx=Math.max(...g.files.map(f=>f.cr.stage));
+      g.files.forEach(f=>{if(f.vn>n-k||!f.kids.length||(mx>0&&f.cr.stage===mx))return;add(f,`${g.title} ${n}개 버전 중 v${pad(f.vn)} (이후 버전 있음)`)});
+    });
+  }
+  if($('#c3').checked){const mb=+$('#n3').value*2**20,d=+$('#n3d').value;files.forEach(f=>{if(f.size>=mb&&age(f)>=d)add(f,`큰 파일 ${fmt(f.size)}, ${Math.floor(age(f))}일 미사용`)})}
+  if($('#c4').checked)files.forEach(f=>{if(f.size===0)add(f,'빈 파일')});
+  if($('#c5').checked)files.forEach(f=>{if(JUNK.test(f.name))add(f,'임시·잔여 파일')});
+  let soon=0;
+  if($('#c6').checked){
+    const chk=o=>{const t=tagOf(o.name);if(t.done)add(o,`목적 달성: ${t.pur}`);if(t.exp){const end=t.exp.getTime()+864e5;if(now>=end)add(o,`유효기간 ${t.expStr} 지남`);else if(end-now<=7*864e5)soon++}};
+    files.forEach(chk);dirs.forEach(chk);
+  }
+  const ents=[...R.entries()],cd=ents.map(e=>e[0]).filter(o=>o.isDir);
+  const inside=(o,d)=>{const q=[...o.path,o.name];return o!==d&&q.length>d.fp.length&&d.fp.every((x,i)=>q[i]===x)};
+  recs=ents.filter(([o])=>!cd.some(d=>inside(o,d))).sort((a,b)=>b[0].size-a[0].size);
+  $('#recl').innerHTML=recs.map(([f,w],i)=>`<div class="grp"><label><input type="checkbox" data-r="${i}"> ${f.isDir?'[폴더] ':''}${esc(full(f))} <small>${fmt(f.size)} · ${f.mtime?dstr(f.mtime):'-'} — ${esc(w.join(' / '))}</small></label></div>`).join('');
+  $('#recsum').textContent=recs.length?`후보 ${recs.length}개 · ${fmt(recs.reduce((a,[f])=>a+f.size,0))}`+(soon?` · 7일 안에 만료 예정 ${soon}개`:''):'삭제 후보가 없어요.'+(soon?` (7일 안에 만료 예정 ${soon}개)`:'');
+  $('#recdel').hidden=!recs.length;
+};
+$('#recall').onclick=()=>$$('#recl input').forEach(c=>c.checked=true);
+$('#recdel').onclick=()=>{
+  const c=$$('#recl input:checked').map(x=>recs[x.dataset.r][0]);if(!c.length)return;
+  if(!confirm(`${c.length}개 파일을 삭제할까요?`+($('#usetrash').checked?' (휴지통 폴더로 이동)':' 영구 삭제라 되돌릴 수 없어요.')))return;
+  run('추천 삭제',c,async f=>{await del(f);log('삭제: '+full(f))});
+};
+
+/* 기록·되돌리기 */
+async function dirAt(parts,create){let d=root;const acc=[];for(const p of parts){d=await d.getDirectoryHandle(p,{create});acc.push(p);DP.set(d,[...acc])}return d}
+async function renderHist(){
+  const j=await readJ();
+  $('#hl').innerHTML=j.map((b,i)=>({b,i})).reverse().map(({b,i})=>`<div class="grp"><h3>${new Date(b.t).toLocaleString('ko-KR')} — ${esc(b.label)} (${b.ops.length}개)</h3><div class="tree">${b.ops.slice(0,5).map(o=>esc(o.from)+' → '+esc(o.to)).join('\n')}${b.ops.length>5?'\n…':''}</div><div class="row" style="padding:0 12px"><button data-u="${i}">이 작업 되돌리기</button></div></div>`).join('')||'<p class="muted">아직 기록이 없어요.</p>';
+}
+$('#hl').onclick=async e=>{
+  const u=e.target.dataset.u;if(u==null||busy)return;
+  const j=await readJ(),b=j[+u];if(!b||!confirm(`“${b.label}” (${b.ops.length}개)를 되돌릴까요?`))return;
+  busy=true;let ok=0,fail=0;
+  for(const op of [...b.ops].reverse()){
+    try{
+      const tp=op.to.split('/'),tn=tp.pop(),fp=op.from.split('/'),fnm=fp.pop();
+      const sd=await dirAt(tp,false),h=await sd.getFileHandle(tn),dd=await dirAt(fp,true);
+      if(await exists(dd,fnm))throw new Error('원래 이름이 이미 있어요: '+op.from);
+      cur=[];await relocate({h,dir:sd,name:tn,path:tp},dd,fnm);ok++;
+    }catch(err){fail++;log('되돌리기 실패: '+err.message)}
+  }
+  busy=false;cur=[];j.splice(+u,1);await writeJ(j);log(`되돌리기: 성공 ${ok}개, 실패 ${fail}개`);
+  await scan();renderHist();
+};
+$('#etrash').onclick=async()=>{
+  if(!root||!confirm('휴지통 폴더의 파일을 모두 영구 삭제할까요? 이 파일들은 되돌릴 수 없게 돼요.'))return;
+  try{const s0=await root.getDirectoryHandle('.정리기');await s0.removeEntry('휴지통',{recursive:true});log('휴지통 폴더를 비웠어요')}catch{log('비울 휴지통이 없어요')}
+};
+$$('nav button').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.t==='hist'&&root)renderHist()}));
+/* 목적·유효기간 태그 */
+const EXPG=/\[~\d{4}[-.]?\d{2}[-.]?\d{2}\]/g,PURG=/\{[^{}]*\}/g;
+function tagOf(name){
+  const e=name.match(/\[~(\d{4})[-.]?(\d{2})[-.]?(\d{2})\]/),p=name.match(/\{([^{}]*?)(✔)?\}/);
+  return {exp:e?new Date(+e[1],e[2]-1,+e[3]):null,expStr:e?`${e[1]}-${e[2]}-${e[3]}`:'',pur:p?p[1].trim():'',done:!!(p&&p[2])};
+}
+function tagName(o,act,pIn,dIn){
+  const [base,ext]=o.isDir?[o.name,'']:split(o.name),t=tagOf(o.name),clean=base.replace(EXPG,'').replace(PURG,'').trim();
+  if(act==='clear')return clean+ext;
+  let pur=t.pur,done=t.done,exp=t.expStr;
+  if(act==='done'){done=true;pur=pur||'완료'}else{if(pIn){pur=pIn;done=false}if(dIn)exp=dIn}
+  return clean+(pur?`{${pur}${done?'✔':''}}`:'')+(exp?`[~${exp}]`:'')+ext;
+}
+let tview=[],tplan=[];
+function renderTag(){
+  const q=$('#tq').value.toLowerCase(),k=$('#tk').value,tg=$('#tf').value==='tag';
+  tview=[...(k==='d'?[]:files),...(k==='f'?[]:dirs)].filter(o=>full(o).toLowerCase().includes(q)&&(!tg||/\[~\d|\{[^{}]*\}/.test(o.name))).slice(0,300);
+  $('#ttb').innerHTML=tview.map((o,i)=>{const t=tagOf(o.name);return `<tr><td><input type="checkbox" data-t="${i}"></td><td>${o.isDir?'[폴더] ':''}${esc(full(o))}</td><td class="muted">${t.pur?esc(t.pur)+(t.done?' ✔':''):''} ${t.expStr?'~'+t.expStr:''}</td></tr>`}).join('')||'<tr><td class="muted">표시할 항목이 없어요.</td></tr>';
+}
+['tq','tk','tf'].forEach(i=>$('#'+i).oninput=renderTag);
+$('#tprev').onclick=()=>{
+  const sel=$$('#ttb input:checked').map(c=>tview[c.dataset.t]),p=$('#tp').value.replace(/[\\/:*?"<>|{}\[\]✔~]/g,'').trim(),n=+$('#tn').value;
+  let d=$('#td').value;if(!d&&n>0)d=dstr(Date.now()+n*864e5);
+  tplan=sel.map(o=>({o,to:tagName(o,$('#tact').value,p,d)})).filter(x=>x.to!==x.o.name);
+  tplan.sort((a,b)=>(!!a.o.isDir-!!b.o.isDir)||(b.o.isDir?b.o.fp.length-a.o.fp.length:0));
+  $('#tpv').innerHTML=tplan.map(x=>`<tr><td class="old">${x.o.isDir?'[폴더] ':''}${esc(x.o.name)}</td><td class="new">${esc(x.to)}</td></tr>`).join('')||'<tr><td colspan="2" class="muted">바뀌는 항목이 없어요. 항목을 체크했는지 확인해 주세요.</td></tr>';
+  $('#tsum').textContent=`${tplan.length}개`;$('#tgo').disabled=!tplan.length;
+};
+$('#tgo').onclick=()=>{
+  if(!confirm(`${tplan.length}개 항목의 이름을 바꿀까요?`))return;
+  run('목적·유효기간 태그',tplan,async({o,to})=>{
+    if(o.isDir){await renameDir(o,to);log(`[폴더] ${o.name} → ${to}`)}
+    else{const n=await uniq(o.dir,to);await relocate(o,o.dir,n);log(`${o.name} → ${n}`)}
+  });
+};
+$$('nav button').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.t==='tag'&&root)renderTag()}));
+</script>
+</body>
+</html>
