@@ -55,6 +55,10 @@ td.p{color:var(--sub)}td.n{text-align:right}
 .grp .thumbs label{flex-direction:column;align-items:flex-start;width:130px;padding:0;font-size:12px;gap:3px}
 .thumbs img{width:130px;height:100px;object-fit:cover;border:1px solid var(--line)}
 .dfa{background:rgba(47,125,79,.22)}.dfd{background:rgba(179,55,43,.22)}.dfg{color:var(--sub)}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);padding:0;width:min(760px,calc(100% - 24px))}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+.sgi{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)}
+.sgi .muted{font-size:13px}.sgi.no{opacity:.8}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -67,8 +71,18 @@ td.p{color:var(--sub)}td.n{text-align:right}
   <button class="primary" id="pick">폴더 선택</button>
   <button id="rescan" disabled>다시 스캔</button>
 </header>
+<dialog id="startd">
+  <div style="padding:18px 20px;max-height:82vh;overflow:auto">
+    <h2 style="margin:0 0 4px;font-size:18px">어디를 정리할까요?</h2>
+    <p class="muted" style="margin:0 0 6px">빨리 차오르는 순서로 추천해요. 열기를 누르면 그 위치에서 폴더 선택 창이 열려요. 크기와 최근 늘어난 용량은 폴더를 연 뒤 ‘정리 제안’ 탭에 나와요.</p>
+    <p class="muted" style="margin:0 0 10px">폴더 자체(예: 다운로드)는 브라우저가 막아서, 열린 창에서 그 안의 폴더를 골라야 해요. 전체를 정리하려면 탐색기에서 새 폴더를 만들어 파일을 옮긴 뒤 그 폴더를 고르세요.</p>
+    <div id="sglist"></div>
+    <div class="row" style="margin-top:14px"><button class="primary" id="sgother">다른 폴더 직접 선택</button><button id="sgclose">닫기</button></div>
+  </div>
+</dialog>
 <nav role="tablist" aria-label="기능">
   <div class="ng g1" role="group" aria-label="보기·분석"><span class="gl">보기·분석</span>
+    <button role="tab" data-t="sug" aria-selected="false">정리 제안</button>
     <button role="tab" data-t="files" aria-selected="true">파일 목록</button>
     <button role="tab" data-t="siz" aria-selected="false">용량 보기</button>
     <button role="tab" data-t="cmp" aria-selected="false">폴더 비교</button>
@@ -322,7 +336,7 @@ td.p{color:var(--sub)}td.n{text-align:right}
       <label>이름표 (선택)<input id="slb" placeholder="예: 납품 전"></label><button class="primary" id="ssave">현재 상태 스냅샷 저장</button>
       <label>저장된 스냅샷<select id="ssel"></select></label><button id="scmp">지금과 비교</button><button id="scsv">CSV 저장</button>
     </div>
-    <p class="muted" id="ssum">스냅샷을 저장해 두면 나중에 무엇이 추가·삭제·수정·이동됐는지 볼 수 있어요.</p>
+    <p class="muted" id="snsum">스냅샷을 저장해 두면 나중에 무엇이 추가·삭제·수정·이동됐는지 볼 수 있어요.</p>
     <div class="tbl"><table><thead><tr><th>구분</th><th>경로</th><th>크기</th><th>수정일</th></tr></thead><tbody id="stb"></tbody></table></div>
     <p class="note">스냅샷은 파일 이름·크기·수정일만 기록해요(내용은 저장하지 않아서 이걸로 파일을 복원할 수는 없어요). 저장 위치는 .정리기/스냅샷이에요. 같은 크기와 수정일의 삭제+추가는 이동·이름 변경으로 봐요.</p>
   </section>
@@ -341,6 +355,12 @@ td.p{color:var(--sub)}td.n{text-align:right}
     </div>
     <div class="tbl"><table><thead><tr><th>D-day</th><th>마감일</th><th>구분</th><th>경로</th><th>목적</th><th>상태</th></tr></thead><tbody id="ddtb"></tbody></table></div>
     <p class="note">이름에 유효기간이 적힌 파일·폴더를 마감일 순으로 모아요(‘목적·유효기간’ 탭에서 붙인 태그). 지난 것이 맨 위에 나오고, 7일 이내는 ‘임박’이에요. 폴더를 스캔할 때마다 갱신돼요.</p>
+  </section>
+  <section id="sug" hidden>
+    <p class="muted" id="sgsum">정리할 폴더를 열면, 안의 폴더 중 어디를 먼저 정리하면 좋을지 제안해요.</p>
+    <div class="row"><button class="primary" id="sgopen">정리할 폴더 고르기</button></div>
+    <div class="tbl" style="max-height:440px"><table><thead><tr><th>폴더</th><th>크기</th><th>파일</th><th>최근 30일 늘어남</th><th>180일 이상 안 건드림</th><th>제안</th><th></th></tr></thead><tbody id="sgtb"></tbody></table></div>
+    <p class="note">▲는 최근 30일에 가장 많이 늘어난 폴더 상위 3곳이에요. 수정일 기준이라 ‘안 건드림’은 읽기만 한 파일도 포함돼요. 제안은 참고용이니 내용을 확인하고 정리하세요.</p>
   </section>
 </main>
 <pre id="log" aria-live="polite"></pre>
@@ -391,19 +411,19 @@ async function scan(){
   try{await walk(root,[],null)}catch(e){log('스캔 실패: '+e.message);busyOff();return}
   busyOff();if(cancel)log('스캔을 중단해서 목록이 일부만 있어요');
   const dm=new Map(dirs.map(d=>[d.fp.join('/'),d]));
-  files.forEach(f=>{for(let k=1;k<=f.path.length;k++){const d=dm.get(f.path.slice(0,k).join('/'));if(d){d.size+=f.size;d.n=(d.n||0)+1;d.mtime=Math.max(d.mtime,f.mtime)}}});
+  files.forEach(f=>{for(let k=1;k<=f.path.length;k++){const d=dm.get(f.path.slice(0,k).join('/'));if(d){const ag=Date.now()-f.mtime;d.size+=f.size;d.n=(d.n||0)+1;d.mtime=Math.max(d.mtime,f.mtime);if(ag<30*864e5)d.rec=(d.rec||0)+f.size;if(ag>180*864e5)d.old=(d.old||0)+f.size}}});
   $('#rescan').disabled=false;
   $('#sum').textContent=`${root.name} — 파일 ${files.length.toLocaleString()}개 · ${fmt(files.reduce((a,f)=>a+f.size,0))} · 빈 폴더 ${empties.length}개`;
   $('#delempty').disabled=!empties.length;$('#esum').textContent=empties.length?`빈 폴더 ${empties.length}개`:'빈 폴더가 없어요';
   $('#dupl').innerHTML='';$('#imgl').innerHTML='';$('#recl').innerHTML='';$('#sgrp').innerHTML='';sgroups=[];todos=[];renderTodo();$('#dupsum').textContent='';$('#deldup').hidden=true;
   $('#rtb').innerHTML='';$('#rgo').disabled=true;$('#otb').innerHTML='';$('#ogo').disabled=true;
-  renderFiles();renderTag();renderSize();renderPrj();fillDl();renderDdl();log(`스캔 완료: 파일 ${files.length}개`);
+  renderFiles();renderTag();renderSize();renderPrj();fillDl();renderDdl();renderSug();log(`스캔 완료: 파일 ${files.length}개`);
 }
 
 /* 탭 */
 $$('nav button').forEach(b=>b.onclick=()=>{
   $$('nav button').forEach(x=>x.setAttribute('aria-selected',x===b));
-  ['files','dups','ren','org','sim','img','rec','hist','tag','cln','siz','cmp','chk','set','prj','dif','snp','tdo','ddl'].forEach(id=>$('#'+id).hidden=id!==b.dataset.t);
+  ['files','dups','ren','org','sim','img','rec','hist','tag','cln','siz','cmp','chk','set','prj','dif','snp','tdo','ddl','sug'].forEach(id=>$('#'+id).hidden=id!==b.dataset.t);
 });
 
 /* 파일 목록 */
@@ -981,7 +1001,7 @@ async function saveH(h){try{(await idb()).transaction('h','readwrite').objectSto
     const d=await idb(),h=await new Promise(res=>{const q=d.transaction('h').objectStore('h').get('last');q.onsuccess=()=>res(q.result);q.onerror=()=>res(null)});
     if(!h||!window.showDirectoryPicker)return;
     $('#last').hidden=false;$('#last').textContent='마지막 폴더 열기: '+h.name;
-    $('#last').onclick=async()=>{try{if(await h.requestPermission({mode:'readwrite'})!=='granted')return;root=h;DP.set(root,[]);await scan()}catch(e){log('열 수 없어요: '+e.message)}};
+    $('#last').onclick=async()=>{try{if(await h.requestPermission({mode:'readwrite'})!=='granted')return;root=h;DP.set(root,[]);await scan();goTab('sug')}catch(e){log('열 수 없어요: '+e.message)}};
   }catch{}
 })();
 
@@ -1259,7 +1279,7 @@ $('#scmp').onclick=async()=>{
   add.forEach(r=>{const l=r[1]>0&&rk.get(r[1]+':'+r[2]);if(l&&l.length)mv.push([l.shift(),r]);else add2.push(r)});
   const rem2=[...rk.values()].flat();
   srows=[...add2.map(r=>['추가',r[0],r[1],dstr(r[2])]),...rem2.map(r=>['삭제',r[0],r[1],dstr(r[2])]),...mod.map(([r,o])=>['수정',r[0],r[1],`${dstr(o[2])} → ${dstr(r[2])}`]),...mv.map(([o,r])=>['이동/이름 변경',`${o[0]} → ${r[0]}`,r[1],dstr(r[2])])];
-  $('#ssum').textContent=`${dstr(snap.t)} 이후: 추가 ${add2.length} · 삭제 ${rem2.length} · 수정 ${mod.length} · 이동/이름 변경 ${mv.length}`;
+  $('#snsum').textContent=`${dstr(snap.t)} 이후: 추가 ${add2.length} · 삭제 ${rem2.length} · 수정 ${mod.length} · 이동/이름 변경 ${mv.length}`;
   $('#stb').innerHTML=srows.slice(0,500).map(r=>`<tr><td>${r[0]}</td><td>${esc(r[1])}</td><td class="n">${fmt(r[2])}</td><td>${esc(r[3])}</td></tr>`).join('')||'<tr><td colspan="4" class="muted">바뀐 게 없어요.</td></tr>';
 };
 $('#scsv').onclick=()=>dl('변경내역.csv',[['구분','경로','크기(바이트)','수정일'],...srows]);
@@ -1321,6 +1341,60 @@ $('#ddcsv').onclick=()=>dl('마감일정.csv',[['D-day','마감일','구분','�
 /* 탭 그룹 색 → 본문 위쪽 선 */
 const tint=b=>$('main').style.setProperty('--gc0',getComputedStyle(b.parentElement).getPropertyValue('--gc'));
 $$('nav button').forEach(b=>b.addEventListener('click',()=>tint(b)));tint($('nav [aria-selected=true]'));
+/* 시작 화면: 정리할 폴더 제안 */
+const SUG=[
+  ['다운로드','downloads','가장 빨리 차는 곳이에요. 설치 파일, 압축 파일, 같은 파일의 중복 다운로드가 쌓여요.'],
+  ['바탕화면','desktop','파일이 흩어져 쌓이기 쉬워요. 종류별 폴더 정리에 좋아요.'],
+  ['문서','documents','중복 파일, 오래된 버전, 유효기간 지난 문서를 찾아보세요.'],
+  ['사진','pictures','비슷한 이미지와 중복 사진이 용량을 많이 차지해요.'],
+  ['동영상','videos','큰 파일이 많아 정리 효과가 커요. 안 쓰는 영상은 zip 보관도 가능해요.'],
+  ['음악','music','같은 곡이 여러 번 들어 있는 경우가 흔해요.']];
+const NOWEB=[
+  ['AppData\\Local\\Temp','브라우저가 앱 데이터 폴더를 막아서 열 수 없어요.','Windows 설정 → 시스템 → 저장소 → 임시 파일에서 정리하거나, 파이썬 도구의 clean 명령을 쓰세요.'],
+  ['C:\\Windows\\Temp','시스템 폴더라 막혀 있고 관리자 권한도 필요해요.','파이썬 도구 clean 명령을 관리자 권한으로 실행하세요.'],
+  ['C:\\Windows\\SoftwareDistribution\\Download','윈도우 업데이트 캐시라 막혀 있어요.','설정의 임시 파일 정리나 파이썬 도구 clean(관리자)을 쓰세요.'],
+  ['C:\\Windows\\Prefetch','시스템 폴더라 막혀 있어요. 정리도 권하지 않아요.','지워도 윈도우가 다시 만들고, 첫 실행만 느려져요.']];
+function goTab(t){document.querySelector(`nav [data-t="${t}"]`).click()}
+function fillStart(){
+  const row=(h,d,b)=>`<div class="sgi"><div>${h}<div class="muted">${d}</div></div>${b}</div>`;
+  $('#sglist').innerHTML=SUG.map((x,i)=>row(`<b>${x[0]}</b>`,x[2],`<button data-s="${x[1]}">열기</button>`)).join('')
+    +row('<b>클라우드 폴더</b> <small class="muted">OneDrive · Dropbox · Google Drive 등</small>','사진·문서가 자동으로 쌓이기 쉬워요. ⚠ 지우거나 옮기면 클라우드에도 반영돼요. 사용자 폴더 안에서 찾아 하위 폴더를 고르세요.','<button data-s="">열기</button>')
+    +row('<b>D · E 등 다른 드라이브</b>','드라이브 전체는 선택할 수 없어요. 열린 창에서 ‘내 PC’로 가서 드라이브 안의 폴더를 고르세요.','<button data-s="">열기</button>')
+    +'<h3 style="margin:16px 0 2px;font-size:15px">웹페이지에서는 열 수 없는 곳</h3>'
+    +NOWEB.map(x=>`<div class="sgi no"><div><b>${x[0]}</b><div class="muted">${x[1]}<br>→ ${x[2]}</div></div></div>`).join('');
+}
+async function openPick(startIn){
+  $('#startd').close();
+  try{root=await showDirectoryPicker(startIn?{mode:'readwrite',startIn}:{mode:'readwrite'})}catch{return}
+  DP.set(root,[]);saveH(root);await scan();goTab('sug');
+}
+const showStart=()=>{
+  if(!window.showDirectoryPicker){alert('이 브라우저는 폴더 접근을 지원하지 않아요. PC의 크롬 또는 엣지에서 열어 주세요.');return}
+  $('#startd').showModal();
+};
+$('#pick').onclick=showStart;$('#sgopen').onclick=showStart;
+$('#sglist').onclick=e=>{const b=e.target.closest('button[data-s]');if(b)openPick(b.dataset.s||undefined)};
+$('#sgother').onclick=()=>openPick();$('#sgclose').onclick=()=>$('#startd').close();
+fillStart();
+
+/* 정리 제안 */
+const CLOUDRE=/^(OneDrive|Dropbox|Google ?Drive|iCloud|Box|MEGA|pCloud|Sync|NAVER ?MYBOX|네이버 ?MYBOX)/i;
+function renderSug(){
+  const now=Date.now(),mk=(name,l)=>({name,n:l.length,size:l.reduce((a,f)=>a+f.size,0),rec:l.filter(f=>now-f.mtime<30*864e5).reduce((a,f)=>a+f.size,0),old:l.filter(f=>now-f.mtime>180*864e5).reduce((a,f)=>a+f.size,0)});
+  const P=dirs.filter(d=>d.fp.length===1).map(d=>({name:d.name,n:d.n||0,size:d.size,rec:d.rec||0,old:d.old||0})),loose=files.filter(f=>!f.path.length),all=mk(root.name,files);
+  if(loose.length){const x=mk('(선택 폴더 바로 아래 파일들)',loose);x.loose=true;P.push(x)}
+  P.sort((a,b)=>b.size-a.size);
+  const grow=new Set(P.filter(p=>p.rec>0).sort((a,b)=>b.rec-a.rec).slice(0,3).map(p=>p.name)),tot=all.size||1,pc=(a,b)=>b?Math.round(a/b*100):0;
+  $('#sgsum').innerHTML=`<b>${esc(root.name)}</b> — ${fmt(all.size)} · 파일 ${all.n.toLocaleString()}개 · 최근 30일에 늘어난 용량 ${fmt(all.rec)} · 180일 이상 안 건드린 용량 ${fmt(all.old)} (${pc(all.old,tot)}%)`+(CLOUDRE.test(root.name)?'<br>⚠ 클라우드 동기화 폴더예요. 지우거나 옮기면 클라우드에도 반영돼요.':'');
+  const adv=p=>{const a=[];
+    if(p.loose&&p.n>=30)a.push('폴더 없이 쌓인 파일이 많아요 → 폴더 정리 탭에서 종류별로');
+    if(grow.has(p.name)||(p.size&&p.rec/p.size>=.4&&p.rec>=50*2**20))a.push('최근 빠르게 늘고 있어요 → 중복 파일·비슷한 이미지 확인');
+    if(p.size&&p.old/p.size>=.5&&p.old>=50*2**20)a.push('오래 안 건드린 파일이 많아요 → 정리 추천 탭');
+    if(p.size/tot>=.3)a.push('용량의 큰 몫이에요 → 용량 보기 탭에서 큰 파일 확인');
+    return a.join(' · ')||'-'};
+  $('#sgtb').innerHTML=P.slice(0,60).map(p=>`<tr><td>${esc(p.name)}</td><td class="n">${fmt(p.size)}</td><td class="n">${p.n.toLocaleString()}</td><td class="n">${fmt(p.rec)}${grow.has(p.name)?' ▲':''}</td><td class="n">${fmt(p.old)} (${pc(p.old,p.size)}%)</td><td style="white-space:normal">${adv(p)}</td><td>${p.loose?'':`<button data-g="${esc(p.name)}">목록에서 보기</button>`}</td></tr>`).join('')||'<tr><td colspan="7" class="muted">하위 폴더가 없어요.</td></tr>';
+}
+$('#sgtb').onclick=e=>{const b=e.target.closest('button[data-g]');if(!b)return;$('#q').value=b.dataset.g+'/';goTab('files');renderFiles()};
 </script>
 </body>
 </html>
